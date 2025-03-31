@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Space Dodge</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #111;
+      touch-action: none;
+      font-family: 'Arial', sans-serif;
+    }
+    
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background-color: #000;
+      touch-action: none;
+    }
+    
+    #gameContainer {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    #mobileControls {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-around;
+    }
+    
+    .control-btn {
+      width: 70px;
+      height: 70px;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+      user-select: none;
+    }
+    
+    #startScreen, #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+    }
+    
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="mobileControls">
+      <div class="control-btn" id="leftBtn">←</div>
+      <div class="control-btn" id="rightBtn">→</div>
+    </div>
+    
+    <div id="startScreen">
+      <h1>Space Dodge</h1>
+      <p>Dodge the falling asteroids as long as possible!</p>
+      <button id="startBtn">Start Game</button>
+    </div>
+    
+    <div id="gameOverScreen" style="display: none;">
+      <h1>Game Over</h1>
+      <p>Your score: <span id="finalScore">0</span></p>
+      <button id="restartBtn">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    // Game setup
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const finalScore = document.getElementById('finalScore');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    
+    // Resize canvas to fit screen
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    
+    // Game state
+    let gameActive = false;
+    let score = 0;
+    let lives = 3;
+    let asteroids = [];
+    let stars = [];
+    
+    // Player properties
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 100,
+      width: 40,
+      height: 60,
+      speed: 8,
+      dx: 0,
+      color: '#4CAF50'
+    };
+    
+    // Controls state
+    const keys = {
+      left: false,
+      right: false
+    };
+    
+    // Game loop
+    function gameLoop() {
+      if (!gameActive) return;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw stars
+      updateStars();
+      
+      // Move player
+      if (keys.left) {
+        player.dx = -player.speed;
+      } else if (keys.right) {
+        player.dx = player.speed;
+      } else {
+        player.dx = 0;
+      }
+      
+      player.x += player.dx;
+      
+      // Keep player on screen
+      if (player.x < 0) {
+        player.x = 0;
+      } else if (player.x + player.width > canvas.width) {
+        player.x = canvas.width - player.width;
+      }
+      
+      // Draw player (spaceship)
+      ctx.fillStyle = player.color;
+      ctx.beginPath();
+      ctx.moveTo(player.x + player.width / 2, player.y);
+      ctx.lineTo(player.x + player.width, player.y + player.height);
+      ctx.lineTo(player.x, player.y + player.height);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Create new asteroids
+      if (Math.random() < 0.03 + (score / 5000)) {
+        const size = Math.random() * 30 + 10;
+        asteroids.push({
+          x: Math.random() * (canvas.width - size),
+          y: -size,
+          size: size,
+          speed: Math.random() * 3 + 2 + (score / 2000),
+          color: `hsl(${Math.random() * 60}, 100%, 50%)`
+        });
+      }
+      
+      // Update and draw asteroids
+      for (let i = 0; i < asteroids.length; i++) {
+        const asteroid = asteroids[i];
+        asteroid.y += asteroid.speed;
+        
+        // Draw asteroid
+        ctx.fillStyle = asteroid.color;
+        ctx.beginPath();
+        ctx.arc(asteroid.x + asteroid.size/2, asteroid.y + asteroid.size/2, asteroid.size/2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Check for collision with player
+        if (
+          player.x < asteroid.x + asteroid.size &&
+          player.x + player.width > asteroid.x &&
+          player.y < asteroid.y + asteroid.size &&
+          player.y + player.height > asteroid.y
+        ) {
+          // Collision detected
+          lives--;
+          asteroids.splice(i, 1);
+          i--;
+          
+          if (lives <= 0) {
+            gameOver();
+          } else {
+            // Flash player on hit
+            player.color = '#ff0000';
+            setTimeout(() => {
+              player.color = '#4CAF50';
+            }, 300);
+          }
+          continue;
+        }
+        
+        // Remove asteroids that go off screen
+        if (asteroid.y > canvas.height) {
+          asteroids.splice(i, 1);
+          i--;
+          score += 10;
+        }
+      }
+      
+      // Draw score and lives
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px Arial';
+      ctx.fillText(`Score: ${score}`, 20, 30);
+      ctx.fillText(`Lives: ${lives}`, canvas.width - 100, 30);
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Initialize stars
+    function createStars() {
+      for (let i = 0; i < 100; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          size: Math.random() * 2 + 1,
+          speed: Math.random() * 0.5 + 0.1
+        });
+      }
+    }
+    
+    // Update and draw stars
+    function updateStars() {
+      ctx.fillStyle = '#fff';
+      for (let i = 0; i < stars.length; i++) {
+        const star = stars[i];
+        star.y += star.speed;
+        
+        // Reset star position when it goes off screen
+        if (star.y > canvas.height) {
+          star.y = 0;
+          star.x = Math.random() * canvas.width;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // Start game
+    function startGame() {
+      gameActive = true;
+      score = 0;
+      lives = 3;
+      asteroids = [];
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - 100;
+      player.color = '#4CAF50';
+      
+      startScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      
+      createStars();
+      gameLoop();
+    }
+    
+    // Game over
+    function gameOver() {
+      gameActive = false;
+      finalScore.textContent = score;
+      gameOverScreen.style.display = 'flex';
+    }
+    
+    // Event listeners
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+    
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+    });
+    
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+    });
+    
+    // Touch controls
+    let leftPressed = false;
+    let rightPressed = false;
+    
+    // Left button
+    leftBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      keys.left = true;
+      leftPressed = true;
+      leftBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+    });
+    
+    leftBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      keys.left = false;
+      leftPressed = false;
+      leftBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+    });
+    
+    // Right button
+    rightBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      keys.right = true;
+      rightPressed = true;
+      rightBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+    });
+    
+    rightBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      keys.right = false;
+      rightPressed = false;
+      rightBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+    });
+    
+    // Handle touch move outside buttons
+    document.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      
+      // Get touch position
+      const touch = e.touches[0];
+      const touchX = touch.clientX;
+      
+      // Determine which side of the screen is touched
+      if (touchX < window.innerWidth / 2) {
+        if (!leftPressed) {
+          keys.left = true;
+          keys.right = false;
+          leftBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+          rightBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        }
+      } else {
+        if (!rightPressed) {
+          keys.right = true;
+          keys.left = false;
+          rightBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+          leftBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        }
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchend', (e) => {
+      if (!leftPressed && !rightPressed) {
+        keys.left = false;
+        keys.right = false;
+        leftBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        rightBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+      }
+    });
+    
+    // Prevent default touch behavior to avoid scrolling
+    document.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+    }, { passive: false });
+  </script>
+</body>
+</html>
